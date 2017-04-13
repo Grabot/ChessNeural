@@ -9,29 +9,42 @@ def dsigmoid(y):
     return y * (1.0 - y)
 
 class MLP_NeuralNetwork(object):
-    def __init__(self, inputNodes, hiddenNodes1, hiddenNodes2, outputNodes):
+    def __init__(self, inputNodes, hiddenNodes, outputNodes):
         """
         :param inputNodes: number of input neurons
-        :param hidden1: number of hidden neurons
-        :param output: number of output neurons
+        :param hiddenNodes: array indicating number of nodes for x hidden layer neurons
+        :param outputNodes: number of output neurons
         """
         self.inputNodes = inputNodes + 1
-        self.hiddenNodes1 = hiddenNodes1
-        self.hiddenNodes2 = hiddenNodes2
+        self.hiddenNodes = hiddenNodes
         self.outputNodes = outputNodes
 
         # set up array of 1s for activations
         self.ai = [1.0] * self.inputNodes
-        self.ah1 = [1.0] * self.hiddenNodes1
+        self.ah = []
+
+        for i in range(0, len(hiddenNodes)):
+            self.ah.append([1.0] * self.hiddenNodes[i])
+
         self.ao = [1.0] * self.outputNodes
 
         # create randomized weights
-        self.wi = np.random.randn(self.inputNodes, self.hiddenNodes1)
-        self.wo = np.random.randn(self.hiddenNodes1, self.outputNodes)
+        self.wi = np.random.randn(self.inputNodes, self.hiddenNodes[0])
+
+        self.wh = []
+        for i in range(0, len(hiddenNodes)-1):
+            self.wh.append(np.random.randn(self.hiddenNodes[i], self.hiddenNodes[i+1]))
+
+        self.wo = np.random.randn(self.hiddenNodes[len(hiddenNodes)-1], self.outputNodes)
 
         # create arrays of 0 for changes
-        self.ci = np.zeros((self.inputNodes, self.hiddenNodes1))
-        self.co = np.zeros((self.hiddenNodes1, self.outputNodes))
+        self.ci = np.zeros((self.inputNodes, self.hiddenNodes[0]))
+
+        self.ch = []
+        for i in range(0, len(hiddenNodes)-1):
+            self.ch.append(np.zeros((self.hiddenNodes[i], self.hiddenNodes[i+1])))
+
+        self.co = np.zeros((self.hiddenNodes[len(hiddenNodes)-1], self.outputNodes))
 
 
     def feedForward(self, inputs):
@@ -39,26 +52,32 @@ class MLP_NeuralNetwork(object):
         if len(inputs) != self.inputNodes - 1:
             raise ValueError('Wrong number of inputs!')
 
-            # input activations
+        # input activations
         for i in range(self.inputNodes - 1):
             self.ai[i] = inputs[i]
 
-            # hidden activations
-        for j in range(self.hiddenNodes1):
+        # first hidden activations
+        for j in range(self.hiddenNodes[0]):
             sum = 0.0
             for i in range(self.inputNodes):
                 sum += self.ai[i] * self.wi[i][j]
-            self.ah1[j] = sigmoid(sum)
+            self.ah[0][j] = sigmoid(sum)
 
-            # output activations
+        # second hidden activations
+        for j in range(self.hiddenNodes[1]):
+            sum = 0.0
+            for i in range(self.hiddenNodes[0]):
+                sum += self.ah[0][i] * self.wh[0][i][j]
+            self.ah[1][j] = sigmoid(sum)
+
+        # output activations
         for k in range(self.outputNodes):
             sum = 0.0
-            for j in range(self.hiddenNodes1):
-                sum += self.ah1[j] * self.wo[j][k]
+            for j in range(self.hiddenNodes[1]):
+                sum += self.ah[1][j] * self.wo[j][k]
             self.ao[k] = sigmoid(sum)
 
         return self.ao[:]
-
 
     def backPropagate(self, targets, N):
         """
@@ -78,24 +97,40 @@ class MLP_NeuralNetwork(object):
 
         # calculate error terms for hidden
         # delta tells you which direction to change the weights
-        hidden_deltas = [0.0] * self.hiddenNodes1
-        for j in range(self.hiddenNodes1):
+        hidden_deltas2 = [0.0] * self.hiddenNodes[1]
+        for j in range(self.hiddenNodes[1]):
             error = 0.0
             for k in range(self.outputNodes):
                 error += output_deltas[k] * self.wo[j][k]
-            hidden_deltas[j] = dsigmoid(self.ah1[j]) * error
+            hidden_deltas2[j] = dsigmoid(self.ah[1][j]) * error
 
-        # update the weights connecting hidden to output
-        for j in range(self.hiddenNodes1):
+        # calculate error terms for hidden
+        # delta tells you which direction to change the weights
+        hidden_deltas1 = [0.0] * self.hiddenNodes[0]
+        for j in range(self.hiddenNodes[0]):
+            error = 0.0
+            for k in range(self.hiddenNodes[1]):
+                error += hidden_deltas2[k] * self.wh[0][j][k]
+            hidden_deltas1[j] = dsigmoid(self.ah[0][j]) * error
+
+        # update the weights connecting second hidden layer to output
+        for j in range(self.hiddenNodes[1]):
             for k in range(self.outputNodes):
-                change = output_deltas[k] * self.ah1[j]
+                change = output_deltas[k] * self.ah[1][j]
                 self.wo[j][k] -= N * change + self.co[j][k]
                 self.co[j][k] = change
 
+        # update the weights connecting first hidden layer to second hidden layer
+        for j in range(self.hiddenNodes[0]):
+            for k in range(self.hiddenNodes[1]):
+                change = hidden_deltas2[k] * self.ah[0][j]
+                self.wh[0][j][k] -= N * change + self.ch[0][j][k]
+                self.ch[0][j][k] = change
+
         # update the weights connecting input to hidden
         for i in range(self.inputNodes):
-            for j in range(self.hiddenNodes1):
-                change = hidden_deltas[j] * self.ai[i]
+            for j in range(self.hiddenNodes[1]):
+                change = hidden_deltas1[j] * self.ai[i]
                 self.wi[i][j] -= N * change + self.ci[i][j]
                 self.ci[i][j] = change
 
