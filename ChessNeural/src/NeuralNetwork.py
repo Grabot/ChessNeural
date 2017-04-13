@@ -100,23 +100,25 @@ class MLP_NeuralNetwork(object):
         for hid in range(0, len(self.hiddenNodes)):
             hidden_deltas.append([0.0] * self.hiddenNodes[hid])
 
-        # calculate error terms for hidden
+        # calculate error terms for first hidden layer
         # delta tells you which direction to change the weights
-        hidden_deltas[1] = [0.0] * self.hiddenNodes[1]
-        for j in range(self.hiddenNodes[1]):
+        hidden_deltas[len(self.hiddenNodes)-1] = [0.0] * self.hiddenNodes[len(self.hiddenNodes)-1]
+        for j in range(self.hiddenNodes[len(self.hiddenNodes)-1]):
             error = 0.0
             for k in range(self.outputNodes):
                 error += output_deltas[k] * self.wo[j][k]
-            hidden_deltas[1][j] = dsigmoid(self.ah[1][j]) * error
+            hidden_deltas[len(self.hiddenNodes)-1][j] = dsigmoid(self.ah[len(self.hiddenNodes)-1][j]) * error
 
-        # calculate error terms for hidden
-        # delta tells you which direction to change the weights
-        hidden_deltas[0] = [0.0] * self.hiddenNodes[0]
-        for j in range(self.hiddenNodes[0]):
-            error = 0.0
-            for k in range(self.hiddenNodes[1]):
-                error += hidden_deltas[1][k] * self.wh[0][j][k]
-            hidden_deltas[0][j] = dsigmoid(self.ah[0][j]) * error
+        for hid in range(len(self.hiddenNodes), 1, -1):
+            # calculate error terms for all hidden layers except first
+            # delta tells you which direction to change the weights
+            hidden_deltas[hid-2] = [0.0] * self.hiddenNodes[hid-2]
+            for j in range(self.hiddenNodes[hid-2]):
+                error = 0.0
+                for k in range(self.hiddenNodes[hid-1]):
+                    error += hidden_deltas[hid-1][k] * self.wh[hid-2][j][k]
+                hidden_deltas[hid-2][j] = dsigmoid(self.ah[hid-2][j]) * error
+
 
         # update the weights connecting second hidden layer to output
         for j in range(self.hiddenNodes[1]):
