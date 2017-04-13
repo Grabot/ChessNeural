@@ -121,23 +121,24 @@ class MLP_NeuralNetwork(object):
 
 
         # update the weights connecting second hidden layer to output
-        for j in range(self.hiddenNodes[1]):
+        for j in range(self.hiddenNodes[len(self.hiddenNodes)-1]):
             for k in range(self.outputNodes):
-                change = output_deltas[k] * self.ah[1][j]
+                change = output_deltas[k] * self.ah[len(self.hiddenNodes)-1][j]
                 self.wo[j][k] -= N * change + self.co[j][k]
                 self.co[j][k] = change
 
-        # update the weights connecting first hidden layer to second hidden layer
-        for j in range(self.hiddenNodes[0]):
-            for k in range(self.hiddenNodes[1]):
-                change = hidden_deltas[1][k] * self.ah[0][j]
-                self.wh[0][j][k] -= N * change + self.ch[0][j][k]
-                self.ch[0][j][k] = change
+        # update the weights connecting the hidden layers
+        for hid in range(len(self.hiddenNodes), 1, -1):
+            for j in range(self.hiddenNodes[hid-2]):
+                for k in range(self.hiddenNodes[hid-1]):
+                    change = hidden_deltas[hid-1][k] * self.ah[hid-2][j]
+                    self.wh[hid-2][j][k] -= N * change + self.ch[hid-2][j][k]
+                    self.ch[hid-2][j][k] = change
 
         # update the weights connecting input to hidden
         for i in range(self.inputNodes):
-            for j in range(self.hiddenNodes[1]):
-                change = hidden_deltas[0][j] * self.ai[i]
+            for j in range(self.hiddenNodes[len(self.hiddenNodes)-2]):
+                change = hidden_deltas[len(self.hiddenNodes)-2][j] * self.ai[i]
                 self.wi[i][j] -= N * change + self.ci[i][j]
                 self.ci[i][j] = change
 

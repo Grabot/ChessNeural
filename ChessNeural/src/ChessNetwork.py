@@ -59,7 +59,7 @@ def demo():
 
     # load the neural network, (input, [hidden], output)
     # the hidden layers has to be an array of at least 2 layers.
-    Neuro = NN.MLP_NeuralNetwork(2, ([3, 3]), 1)
+    Neuro = NN.MLP_NeuralNetwork(2, ([4, 6]), 1)
     Neuro.train(chess)
     # x = [4, 3, 2, 5, 6, 2, 3, 4,
     #      1, 1, 1, 1, 1, 1, 1, 1,
