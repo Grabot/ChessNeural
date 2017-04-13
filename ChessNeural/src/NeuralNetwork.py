@@ -102,24 +102,21 @@ class MLP_NeuralNetwork(object):
 
         # calculate error terms for hidden
         # delta tells you which direction to change the weights
-        hidden_deltas[len(self.hiddenNodes)-1] = [0.0] * self.hiddenNodes[1]
+        hidden_deltas[1] = [0.0] * self.hiddenNodes[1]
         for j in range(self.hiddenNodes[1]):
             error = 0.0
             for k in range(self.outputNodes):
                 error += output_deltas[k] * self.wo[j][k]
-                hidden_deltas[len(self.hiddenNodes) - 1][j] = dsigmoid(self.ah[1][j]) * error
-
-       # for hid in range(len(self.hiddenNodes), 1, -1):
-            #print(hid)
+            hidden_deltas[1][j] = dsigmoid(self.ah[1][j]) * error
 
         # calculate error terms for hidden
         # delta tells you which direction to change the weights
-        hidden_deltas[len(self.hiddenNodes) - 2] = [0.0] * self.hiddenNodes[0]
+        hidden_deltas[0] = [0.0] * self.hiddenNodes[0]
         for j in range(self.hiddenNodes[0]):
             error = 0.0
             for k in range(self.hiddenNodes[1]):
-                error += hidden_deltas[len(self.hiddenNodes)-1][k] * self.wh[0][j][k]
-                hidden_deltas[len(self.hiddenNodes) - 2][j] = dsigmoid(self.ah[0][j]) * error
+                error += hidden_deltas[1][k] * self.wh[0][j][k]
+            hidden_deltas[0][j] = dsigmoid(self.ah[0][j]) * error
 
         # update the weights connecting second hidden layer to output
         for j in range(self.hiddenNodes[1]):
@@ -131,14 +128,14 @@ class MLP_NeuralNetwork(object):
         # update the weights connecting first hidden layer to second hidden layer
         for j in range(self.hiddenNodes[0]):
             for k in range(self.hiddenNodes[1]):
-                change = hidden_deltas[len(self.hiddenNodes)-2][k] * self.ah[0][j]
+                change = hidden_deltas[1][k] * self.ah[0][j]
                 self.wh[0][j][k] -= N * change + self.ch[0][j][k]
                 self.ch[0][j][k] = change
 
         # update the weights connecting input to hidden
         for i in range(self.inputNodes):
             for j in range(self.hiddenNodes[1]):
-                change = hidden_deltas[len(self.hiddenNodes)-2][j] * self.ai[i]
+                change = hidden_deltas[0][j] * self.ai[i]
                 self.wi[i][j] -= N * change + self.ci[i][j]
                 self.ci[i][j] = change
 
