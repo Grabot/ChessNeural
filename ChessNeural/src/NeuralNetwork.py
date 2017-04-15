@@ -75,7 +75,7 @@ class MLP_NeuralNetwork(object):
         for k in range(self.outputNodes):
             sum = 0.0
             for j in range(self.hiddenNodes[len(self.hiddenNodes)-1]):
-                sum += self.ah[1][j] * self.wo[j][k]
+                sum += self.ah[len(self.hiddenNodes)-1][j] * self.wo[j][k]
             self.ao[k] = sigmoid(sum)
 
         return self.ao[:]
@@ -137,8 +137,8 @@ class MLP_NeuralNetwork(object):
 
         # update the weights connecting input to hidden
         for i in range(self.inputNodes):
-            for j in range(self.hiddenNodes[len(self.hiddenNodes)-2]):
-                change = hidden_deltas[len(self.hiddenNodes)-2][j] * self.ai[i]
+            for j in range(self.hiddenNodes[0]):
+                change = hidden_deltas[0][j] * self.ai[i]
                 self.wi[i][j] -= N * change + self.ci[i][j]
                 self.ci[i][j] = change
 
