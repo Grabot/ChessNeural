@@ -55,11 +55,10 @@ def load_chess(filename):
 
 def demo():
 
-    chess = load_xor()
-
-    # load the neural network, (input, [hidden], output)
+    chess = load_chess('chess2.txt')
+    # load the neural network, (input, [hidden], output)+
     # the hidden layers has to be an array of at least 2 layers.
-    Neuro = NN.MLP_NeuralNetwork(2, ([3, 4, 4, 6]), 1)
+    Neuro = NN.MLP_NeuralNetwork(len(chess[0][0]), ([14, 12, 15]), len(chess[0][1]))
     Neuro.train(chess)
     print(Neuro.test(chess))
     # x = [4, 3, 2, 5, 6, 2, 3, 4,
@@ -73,25 +72,25 @@ def demo():
     # print(Neuro.giveInput(x))
     # predict = Neuro.predict(X)
 
-    x = np.linspace(0, 1, 200)
-    y = np.linspace(0, 1, 200)
-
-    intensity = []
-    for i in x:
-        temp = []
-        for j in y:
-            temp.append(Neuro.giveInput([i, j]))
-        intensity.append(temp)
-
-
-    #setup the 2D grid with Numpy
-    x, y = np.meshgrid(x, y)
-
-
-    # now just plug the data into pcolormesh, it's that easy!
-    plt.pcolormesh(x, y, intensity)
-    plt.colorbar()  # need a colorbar to show the intensity scale
-    plt.show()  # boom
+    # x = np.linspace(0, 1, 200)
+    # y = np.linspace(0, 1, 200)
+    #
+    # intensity = []
+    # for i in x:
+    #     temp = []
+    #     for j in y:
+    #         temp.append(Neuro.giveInput([i, j]))
+    #     intensity.append(temp)
+    #
+    #
+    # #setup the 2D grid with Numpy
+    # x, y = np.meshgrid(x, y)
+    #
+    #
+    # # now just plug the data into pcolormesh, it's that easy!
+    # plt.pcolormesh(x, y, intensity)
+    # plt.colorbar()  # need a colorbar to show the intensity scale
+    # plt.show()  # boom
 
 
 if __name__ == '__main__':

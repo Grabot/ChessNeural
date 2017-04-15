@@ -159,7 +159,7 @@ class MLP_NeuralNetwork(object):
                 targets = p[1]
                 self.feedForward(inputs)
                 error = self.backPropagate(targets, N)
-            if i % 1000 == 0:
+            if i % 10 == 0:
                 print('error %-.5f' % error, " progress", i, "of", iterations)
 
 
