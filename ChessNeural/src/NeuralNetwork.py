@@ -1,12 +1,24 @@
 import numpy as np
 
+
 def sigmoid(x):
     return 1 / (1 + np.exp(-x))
+
+
 # derivative of sigmoid
 # sigmoid(y) * (1.0 - sigmoid(y))
 # the way we use this y is already sigmoided
 def dsigmoid(y):
     return y * (1.0 - y)
+
+
+class MLP_Layer(object):
+    def __init__(self, activation, weight_after, bias, changes):
+        self.activation = activation
+        self.weight_after = weight_after
+        self.bias = bias
+        self.changes = changes
+
 
 class MLP_NeuralNetwork(object):
     def __init__(self, inputNodes, hiddenNodes, outputNodes):
@@ -15,27 +27,27 @@ class MLP_NeuralNetwork(object):
         :param hiddenNodes: array indicating number of nodes for x hidden layer neurons
         :param outputNodes: number of output neurons
         """
-        self.inputNodes = inputNodes + 1
+        self.inputNodes = inputNodes
         self.hiddenNodes = hiddenNodes
         self.outputNodes = outputNodes
 
         # set up array of 1s for activations
-        self.ai = [1.0] * self.inputNodes
+        self.ai = np.ones(shape=(self.inputNodes,))
 
         self.ah = []
         for i in range(0, len(hiddenNodes)):
-            self.ah.append([1.0] * self.hiddenNodes[i])
+            self.ah.append(np.empty(shape=(self.hiddenNodes[i],)))
 
-        self.ao = [1.0] * self.outputNodes
+        self.ao = np.empty(shape=(self.outputNodes,))
 
         # create randomized weights
-        self.wi = np.random.randn(self.inputNodes, self.hiddenNodes[0])
+        self.wi = np.random.randn(self.hiddenNodes[0], self.inputNodes)
 
         self.wh = []
         for i in range(0, len(hiddenNodes)-1):
-            self.wh.append(np.random.randn(self.hiddenNodes[i], self.hiddenNodes[i+1]))
+            self.wh.append(np.random.randn(self.hiddenNodes[i+1], self.hiddenNodes[i]))
 
-        self.wo = np.random.randn(self.hiddenNodes[len(hiddenNodes)-1], self.outputNodes)
+        self.wo = np.random.randn(self.outputNodes, self.hiddenNodes[len(hiddenNodes)-1])
 
         # create arrays of 0 for changes
         self.ci = np.zeros((self.inputNodes, self.hiddenNodes[0]))
@@ -45,40 +57,57 @@ class MLP_NeuralNetwork(object):
             self.ch.append(np.zeros((self.hiddenNodes[i], self.hiddenNodes[i+1])))
 
         self.co = np.zeros((self.hiddenNodes[len(hiddenNodes)-1], self.outputNodes))
-
+        
+        # combine all the layers
+        self.layers = [MLP_Layer(self.ai, self.wi, None, self.ci)]
+        for a, w, c in zip(self.ah, self.wh, self.ch):
+            self.layers.append(MLP_Layer(a, w, None, c))
+        self.layers += [MLP_Layer(self.ah[-1], self.wo, None, self.co),
+            MLP_Layer(self.ao, None, None, None)]
+        for layer in self.layers:
+            print('{0:}  {1:}'.format(layer.activation.shape, layer.weight_after.T.shape if layer.weight_after is not None else layer.weight_after))
 
     def feedForward(self, inputs):
 
-        if len(inputs) != self.inputNodes - 1:
+        if len(inputs) != self.inputNodes:
             raise ValueError('Wrong number of inputs!')
 
         # input activations
-        for i in range(self.inputNodes - 1):
-            self.ai[i] = inputs[i]
+        self.layers[0].activation[:] = inputs
+        
+        # do all the forward propagating uniformly for all the layers
+        for k in range(1, len(self.layers)):
+            print(">>", self.layers[k].activation.shape, self.layers[k - 1].weight_after.shape, self.layers[k - 1].activation.shape)
+            self.layers[k].activation[:] = sigmoid(
+                self.layers[k - 1].weight_after.dot(
+                    self.layers[k - 1].activation
+                )
+            )
+            
+        
+        # # first hidden activations
+        # for j in range(self.hiddenNodes[0]):
+        #     sum = 0.0
+        #     for i in range(self.inputNodes):
+        #         sum += self.ai[i] * self.wi[i][j]
+        #     self.ah[0][j] = sigmoid(sum)
+        #
+        # # second and further hidden activations
+        # for hid in range(1, len(self.hiddenNodes)):
+        #     for j in range(self.hiddenNodes[hid]):
+        #         sum = 0.0
+        #         for i in range(self.hiddenNodes[hid-1]):
+        #             sum += self.ah[hid-1][i] * self.wh[hid-1][i][j]
+        #         self.ah[hid][j] = sigmoid(sum)
+        #
+        # # output activations
+        # for k in range(self.outputNodes):
+        #     sum = 0.0
+        #     for j in range(self.hiddenNodes[len(self.hiddenNodes)-1]):
+        #         sum += self.ah[len(self.hiddenNodes)-1][j] * self.wo[j][k]
+        #     self.ao[k] = sigmoid(sum)
 
-        # first hidden activations
-        for j in range(self.hiddenNodes[0]):
-            sum = 0.0
-            for i in range(self.inputNodes):
-                sum += self.ai[i] * self.wi[i][j]
-            self.ah[0][j] = sigmoid(sum)
-
-        # second and further hidden activations
-        for hid in range(1, len(self.hiddenNodes)):
-            for j in range(self.hiddenNodes[hid]):
-                sum = 0.0
-                for i in range(self.hiddenNodes[hid-1]):
-                    sum += self.ah[hid-1][i] * self.wh[hid-1][i][j]
-                self.ah[hid][j] = sigmoid(sum)
-
-        # output activations
-        for k in range(self.outputNodes):
-            sum = 0.0
-            for j in range(self.hiddenNodes[len(self.hiddenNodes)-1]):
-                sum += self.ah[len(self.hiddenNodes)-1][j] * self.wo[j][k]
-            self.ao[k] = sigmoid(sum)
-
-        return self.ao[:]
+        return self.layers[-1].activation
 
     def backPropagate(self, targets, N):
         """
@@ -149,19 +178,18 @@ class MLP_NeuralNetwork(object):
 
         return error
 
-
-    def train(self, patterns, iterations=20000, N=0.01):
+    def train(self, input_series, target_series, iterations=20000, N=0.01):
         # N: learning rate
+        assert input_series.shape[0] == target_series.shape[0]
         for i in range(iterations):
             error = 0.0
-            for p in patterns:
-                inputs = p[0]
-                targets = p[1]
+            for p in range(input_series.shape[0]):
+                inputs = input_series[p, :]
+                targets = target_series[p, :]
                 self.feedForward(inputs)
                 error = self.backPropagate(targets, N)
             if i % 10 == 0:
-                print('error %-.5f' % error, " progress", i, "of", iterations)
-
+                print('error %8.5f  progress %5d of %5d' % (error, i, iterations))
 
     def predict(self, X):
         """
@@ -173,7 +201,6 @@ class MLP_NeuralNetwork(object):
 
         return predictions
 
-
     def test(self, patterns):
         """
         Currently this will print out the targets next to the predictions.
@@ -184,3 +211,5 @@ class MLP_NeuralNetwork(object):
 
     def giveInput(self, input):
         return self.feedForward(input)[0]
+
+

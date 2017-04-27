@@ -1,5 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
+from os.path import join
 import src.NeuralNetwork as NN
 
 
@@ -54,13 +55,17 @@ def load_chess(filename):
 
 
 def demo():
-
-    chess = load_chess('chess2.txt')
+    
+    # make it reproducible by using a random seed
+    np.random.seed(1275464)
+    
+    chess = load_chess(join('src', 'chess2.txt'))
     # load the neural network, (input, [hidden], output)+
     # the hidden layers has to be an array of at least 2 layers.
-    Neuro = NN.MLP_NeuralNetwork(len(chess[0][0]), ([14, 12, 15]), len(chess[0][1]))
-    Neuro.train(chess)
-    print(Neuro.test(chess))
+    input, target = map(np.array, zip(*chess))
+    neuro = NN.MLP_NeuralNetwork(input.shape[1], ([14, 12, 15]), target.shape[1])
+    neuro.train(input, target)
+    print(neuro.test(chess))
     # x = [4, 3, 2, 5, 6, 2, 3, 4,
     #      1, 1, 1, 1, 1, 1, 1, 1,
     #      0, 0, 0, 0, 0, 0, 0, 0,
