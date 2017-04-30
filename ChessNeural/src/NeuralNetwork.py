@@ -12,15 +12,32 @@ def dsigmoid(y):
     return y * (1.0 - y)
 
 
+def dsigmoid_unsigmoided(y):
+    z = sigmoid(y)
+    return dsigmoid(z)
+
+
+def linear(x):
+    return x
+
+
+def dlinear(y):
+    return 1
+
+
 class MLP_Layer(object):
     """
     For now this just holds the data of each layer (it could have some methods).
     """
-    def __init__(self, activation, weight_after, bias, changes):
+    def __init__(self, activation, weight_after, bias, activation_function, derivative_activation_function):
         self.activation = activation
+        self.raw_activation = np.empty(activation.shape)  # without activation function
         self.weight_after = weight_after
-        self.bias = bias
-        self.changes = changes
+        self.bias = bias or 0  # default bias is 0
+        self.delta_weight = np.empty(weight_after.shape) if weight_after is not None else 0
+        self.delta_bias = np.empty(activation.shape)
+        self.activation_function = activation_function
+        self.derivative_activation_function = derivative_activation_function
 
 
 class MLP_NeuralNetwork(object):
@@ -62,13 +79,13 @@ class MLP_NeuralNetwork(object):
         self.co = np.zeros((self.outputNodes, self.hiddenNodes[len(hiddenNodes)-1]))
         
         # combine all the layers
-        self.layers = [MLP_Layer(self.ai, self.wi, None, self.ci)]
+        self.layers = [MLP_Layer(self.ai, self.wi, None, None, None)]
         for a, w, c in zip(self.ah, self.wh, self.ch):
-            self.layers.append(MLP_Layer(a, w, None, c))
-        self.layers += [MLP_Layer(self.ah[-1], self.wo, None, self.co),
-            MLP_Layer(self.ao, None, None, None)]
-        for layer in self.layers:
-            print('{0:}  {1:}'.format(layer.activation.shape, layer.weight_after.T.shape if layer.weight_after is not None else layer.weight_after))
+            self.layers.append(MLP_Layer(a, w, None, sigmoid, dsigmoid_unsigmoided))
+        self.layers += [MLP_Layer(self.ah[-1], self.wo, None, sigmoid, dsigmoid_unsigmoided),
+                        MLP_Layer(self.ao, None, None, linear, dlinear)]
+        # for layer in self.layers:  # todo
+        #     print('{0:}  {1:}'.format(layer.activation.shape, layer.weight_after.T.shape if layer.weight_after is not None else layer.weight_after))
 
     def feedForward(self, inputs):
 
@@ -81,12 +98,9 @@ class MLP_NeuralNetwork(object):
         # do all the forward propagating uniformly for all the layers
         for k in range(1, len(self.layers)):
             # print(">>", self.layers[k].activation.shape, self.layers[k - 1].weight_after.shape, self.layers[k - 1].activation.shape)
-            self.layers[k].activation[:] = sigmoid(
-                self.layers[k - 1].weight_after.dot(
-                    self.layers[k - 1].activation
-                )
-            )
-        """
+            self.layers[k].raw_activation[:] = self.layers[k - 1].weight_after.dot(self.layers[k - 1].activation)
+            self.layers[k].activation[:] = self.layers[k].activation_function(self.layers[k].raw_activation[:])
+        """ loop code:
         # first hidden activations
         for j in range(self.hiddenNodes[0]):
             sum = 0.0
@@ -116,20 +130,74 @@ class MLP_NeuralNetwork(object):
         :param targets: y values
         :param N: learning rate
         :return: updated weights and current error
+        
+        Information at http://neuralnetworksanddeeplearning.com/chap2.html#the_four_fundamental_equations_behind_backpropagation
         """
         if len(targets) != self.outputNodes:
             raise ValueError('Wrong number of targets')
 
-        # do all the back propagating uniformly for all the layers
-        for k in range(len(self.layers) -1, 0, -1):
-            pass  # todo
+        # Get the deltas of the output layer
+        dcost = self.layers[-1].activation - targets  # (this is specific to quadratic cost function)
+        delta = - self.layers[-1].derivative_activation_function(self.layers[-1].raw_activation) * dcost
+        
+        aw = np.mean(tuple(l.weight_after.mean() if l.weight_after is not None else 0 for l in self.layers))  # todo
+        # print('avg weight: {}'.format(aw))
+        if np.isnan(aw): exit(666)
+        
+        # todo: there is probably some easier mathematical operation to avoid this loop
+        # for j in range(self.hiddenNodes[len(self.hiddenNodes)-1]):
+        #     errors = deltas * self.layers[-2].weight_after[:, j]
+        
+        # Do all the back propagating uniformly for all the layers
+        for k in range(len(self.layers) - 1, 0, -1):
+            pre_layer, post_layer = self.layers[k - 1], self.layers[k]
+            # print('layers {0:} <- {1:}'.format(pre_layer.activation.shape[0], post_layer.activation.shape[0]))
+            #todo: do weight update
+            # print(post_layer.derivative_activation_function)
+            # print(pre_layer.activation.shape)
+            # print(pre_layer.weight_after.T.shape)
+            # print(deltas.shape)
+            
+           
+            # Calculate the changes in weights and biasses
+            post_layer.delta_bias[:] = N * delta
+            # Update the weights in the network (from input activations and output deltas)
+            # print(pre_layer.weight_after.shape)
+            # print(deltas.shape)
+            # print(pre_layer.activation.shape)
+            # print(np.outer(deltas, pre_layer.activation).shape)
+            # print(np.outer(pre_layer.activation, deltas).shape)
+            pre_layer.delta_weight[:, :] = N * np.outer(delta, pre_layer.activation)
+           
+            # Compute the deltas for the previous layer from those of the current one
+            delta = post_layer.derivative_activation_function(pre_layer.raw_activation) * \
+                pre_layer.weight_after.T.dot(delta)
+            # todo: last delta is useless, no more updates
+
+            # Update the biases in the network
+            post_layer.bias += post_layer.delta_bias  # could actually be updated immediately
+            # Update the weights in the network (from input activations and output deltas)
+            # print(pre_layer.weight_after.shape)
+            # print(deltas.shape)
+            # print(pre_layer.activation.shape)
+            # print(np.outer(deltas, pre_layer.activation).shape)
+            # print(np.outer(pre_layer.activation, deltas).shape)
+            pre_layer.weight_after += pre_layer.delta_weight
+            
+            ##for j in range(self.hiddenNodes[len(self.hiddenNodes)-1]):
+            ##    errors = deltas * self.layers[k - 1].weight_after[:, j]
+            # errors += deltas * self.layers[k - 1].weight_after[k, :]
+            # hidden_deltas[len(self.hiddenNodes)-1][j] = dsigmoid(self.ah[len(self.hiddenNodes)-1][j]) * error
+            ##    deltas = self.layers[k].activation_function(self.layers[k].activation) * errors
             # print("^^", self.layers[k].activation.shape, self.layers[k - 1].weight_after.shape, self.layers[k - 1].activation.shape)
             # self.layers[k].activation[:] = sigmoid(
             #     self.layers[k - 1].weight_after.dot(
             #         self.layers[k - 1].activation
             #     )
             # )
-
+        return self.cost_function(self.layers[-1].activation, targets)
+        #todo: the rest is never used
+        
         # calculate error terms for output
         # the delta tell you which direction to change the weights
         output_deltas = [0.0] * self.outputNodes
@@ -192,10 +260,10 @@ class MLP_NeuralNetwork(object):
             error += 0.5 * (target[k] - output[k]) ** 2
         return error
 
-    def train(self, input_series, target_series, iterations=101, N=0.01):
+    def train(self, input_series, target_series, iterations=10000, N=0.01):
         # N: learning rate
         assert input_series.shape[0] == target_series.shape[0]
-        print('error %8.5f  progress %5d of %5d' % (
+        print('error %8.5f  progress %5d of %5d' % (  # todo: suspicious values
             self.cost_function(self.feedForward(input_series[0]), target_series[0]), 0, iterations))
         for i in range(iterations):
             error = 0.0
