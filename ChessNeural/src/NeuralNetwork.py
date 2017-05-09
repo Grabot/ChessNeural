@@ -1,15 +1,17 @@
+
 import numpy as np
+import os
 
 
 def sigmoid(x):
-    return 1 / (1 + np.exp(-x))
+    return 1. / (1 + np.exp(-x))
 
 
 # derivative of sigmoid
 # sigmoid(y) * (1.0 - sigmoid(y))
 # the way we use this y is already sigmoided
 def dsigmoid(y):
-    return y * (1.0 - y)
+    return y * (1. - y)
 
 
 def dsigmoid_unsigmoided(y):
@@ -33,7 +35,7 @@ class MLP_Layer(object):
         self.activation = activation
         self.raw_activation = np.empty(activation.shape)  # without activation function
         self.weight_after = weight_after
-        self.bias = bias or 0  # default bias is 0
+        self.bias = 0 if bias is None else bias  # default bias is 0
         self.delta_weight = np.empty(weight_after.shape) if weight_after is not None else 0
         self.delta_bias = np.empty(activation.shape)
         self.activation_function = activation_function
@@ -79,11 +81,11 @@ class MLP_NeuralNetwork(object):
         self.co = np.zeros((self.outputNodes, self.hiddenNodes[len(hiddenNodes)-1]))
         
         # combine all the layers
-        self.layers = [MLP_Layer(self.ai, self.wi, None, None, None)]
+        self.layers = [MLP_Layer(self.ai, self.wi, self.ai * 0, None, None)]
         for a, w, c in zip(self.ah, self.wh, self.ch):
-            self.layers.append(MLP_Layer(a, w, None, sigmoid, dsigmoid_unsigmoided))
-        self.layers += [MLP_Layer(self.ah[-1], self.wo, None, sigmoid, dsigmoid_unsigmoided),
-                        MLP_Layer(self.ao, None, None, linear, dlinear)]
+            self.layers.append(MLP_Layer(a, w, a * 0, sigmoid, dsigmoid_unsigmoided))
+        self.layers += [MLP_Layer(self.ah[-1], self.wo, self.ah[-1] * 0, sigmoid, dsigmoid_unsigmoided),
+                        MLP_Layer(self.ao, None, self.ao * 0, linear, dlinear)]
         # for layer in self.layers:  # todo
         #     print('{0:}  {1:}'.format(layer.activation.shape, layer.weight_after.T.shape if layer.weight_after is not None else layer.weight_after))
 
@@ -98,7 +100,7 @@ class MLP_NeuralNetwork(object):
         # do all the forward propagating uniformly for all the layers
         for k in range(1, len(self.layers)):
             # print(">>", self.layers[k].activation.shape, self.layers[k - 1].weight_after.shape, self.layers[k - 1].activation.shape)
-            self.layers[k].raw_activation[:] = self.layers[k - 1].weight_after.dot(self.layers[k - 1].activation)
+            self.layers[k].raw_activation[:] = self.layers[k - 1].weight_after.dot(self.layers[k - 1].activation) + self.layers[k].bias
             self.layers[k].activation[:] = self.layers[k].activation_function(self.layers[k].raw_activation[:])
         """ loop code:
         # first hidden activations
@@ -133,6 +135,16 @@ class MLP_NeuralNetwork(object):
         
         Information at http://neuralnetworksanddeeplearning.com/chap2.html#the_four_fundamental_equations_behind_backpropagation
         """
+        
+        if os.environ.get('DEBUGLOG', False):
+            print('#' * 32)
+            for layer in self.layers:
+                print('A: ' + '  '.join('{0:8.3f}'.format(act) for act in layer.activation))
+                print('  B: ' + '  '.join('{0:8.3f}'.format(act) for act in layer.bias))
+                if layer.weight_after is not None:
+                    for row in layer.weight_after:
+                        print('  W: ' + '  '.join('{0:8.3f}'.format(w) for w in row))
+        
         if len(targets) != self.outputNodes:
             raise ValueError('Wrong number of targets')
 
@@ -158,8 +170,7 @@ class MLP_NeuralNetwork(object):
             # print(pre_layer.weight_after.T.shape)
             # print(deltas.shape)
             
-           
-            # Calculate the changes in weights and biasses
+            # Calculate the changes in weights and biases
             post_layer.delta_bias[:] = N * delta
             # Update the weights in the network (from input activations and output deltas)
             # print(pre_layer.weight_after.shape)
@@ -168,6 +179,12 @@ class MLP_NeuralNetwork(object):
             # print(np.outer(deltas, pre_layer.activation).shape)
             # print(np.outer(pre_layer.activation, deltas).shape)
             pre_layer.delta_weight[:, :] = N * np.outer(delta, pre_layer.activation)
+            
+            if os.environ.get('DEBUGLOG', False):
+                print('    D: ' + '  '.join('{0:8.3f}'.format(d) for d in delta))
+                print('   DB: ' + '  '.join('{0:8.3f}'.format(d) for d in post_layer.delta_bias))
+                for row in pre_layer.delta_weight:
+                    print('   DW: ' + '  '.join('{0:8.3f}'.format(w) for w in row))
            
             # Compute the deltas for the previous layer from those of the current one
             delta = post_layer.derivative_activation_function(pre_layer.raw_activation) * \
@@ -272,7 +289,7 @@ class MLP_NeuralNetwork(object):
                 targets = target_series[p, :]
                 self.feedForward(inputs)
                 error = self.backPropagate(targets, N)
-            if i > 0 and i % 10 == 0:
+            if i > 0 and i % 1 == 0:
                 print('error %8.5f  progress %5d of %5d' % (error, i, iterations))
 
     def predict(self, X):

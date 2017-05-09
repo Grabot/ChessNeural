@@ -63,8 +63,7 @@ def demo():
     # load the neural network, (input, [hidden], output)+
     # the hidden layers has to be an array of at least 2 layers.
     input, target = map(np.array, zip(*chess))
-    neuro = NN.MLP_NeuralNetwork(input.shape[1], ([14, 12, 15]), target.shape[1])
-    neuro.train(input, target, iterations=1000)
+neuro = NN.MLP_NeuralNetwork(input.shape[1], ([14, 12, 15]), target.shape[1])
     # print(neuro.test(chess))
     # x = [4, 3, 2, 5, 6, 2, 3, 4,
     #      1, 1, 1, 1, 1, 1, 1, 1,
