@@ -84,8 +84,8 @@ class MLP_NeuralNetwork(object):
         self.layers = [MLP_Layer(self.ai, self.wi, self.ai * 0, None, None)]
         for a, w, c in zip(self.ah, self.wh, self.ch):
             self.layers.append(MLP_Layer(a, w, a * 0, sigmoid, dsigmoid_unsigmoided))
-        self.layers += [MLP_Layer(self.ah[-1], self.wo, self.ah[-1] * 0, sigmoid, dsigmoid_unsigmoided),
-                        MLP_Layer(self.ao, None, self.ao * 0, linear, dlinear)]
+        self.layers += [MLP_Layer(self.ah[-1], self.wo, np.random.randn(*self.ah[-1].shape), sigmoid, dsigmoid_unsigmoided),
+                        MLP_Layer(self.ao, None, np.random.randn(*self.ao.shape), linear, dlinear)]
         # for layer in self.layers:  # todo
         #     print('{0:}  {1:}'.format(layer.activation.shape, layer.weight_after.T.shape if layer.weight_after is not None else layer.weight_after))
 
@@ -100,6 +100,7 @@ class MLP_NeuralNetwork(object):
         # do all the forward propagating uniformly for all the layers
         for k in range(1, len(self.layers)):
             # print(">>", self.layers[k].activation.shape, self.layers[k - 1].weight_after.shape, self.layers[k - 1].activation.shape)
+            print(self.layers[k - 1].weight_after.dot(self.layers[k - 1].activation).shape, self.layers[k].bias.shape)
             self.layers[k].raw_activation[:] = self.layers[k - 1].weight_after.dot(self.layers[k - 1].activation) + self.layers[k].bias
             self.layers[k].activation[:] = self.layers[k].activation_function(self.layers[k].raw_activation[:])
         """ loop code:
