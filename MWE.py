@@ -1,6 +1,7 @@
 
+from matplotlib.pyplot import subplots, show
 from numpy import zeros, copy, newaxis, array, logical_xor, exp, sqrt
-from numpy.random import randn, seed, randint
+from numpy.random import randn, seed
 
 
 seed(123456789)
@@ -72,7 +73,6 @@ class Network(object):
     
     def learn_from(self, expected):
         for output in self.output_layers:
-            # print(">>> learn from output " , output)
             output.delta_from_expectation(expected, learning_rate=self.learning_rate)
     
     def __str__(self):
@@ -101,7 +101,7 @@ class Layer(object):
         self.activation = zeros(self.size)
         
     def link(self, next_layer):
-        # note that this may happen last-to-first
+        # Note that this may happen last-to-first
         self.next.append(next_layer)
         next_layer.previous.append(self)
         return self
@@ -129,21 +129,14 @@ class Layer(object):
 class DenseLayer(Layer):
     def __init__(self, size, activf=lin, deriv_activf=dlin):
         super(DenseLayer, self).__init__(size, activf=activf, deriv_activf=deriv_activf)
-        # self.raw_input = zeros(self.size)
         self.bias = randn(self.size)
         self.weight_before = None
         self.delta = zeros(self.size)
-
-    # def link(self, next_layer):
-        # super(DenseLayer, self).link(next_layer)
-        # assert len(self.previous) == 1, "{0:d} previous layers instead of 1 for {1:}".format(len(self.previous), self)
-        # self.weight_before = randn(self.previous[0].size, self.size)
     
     def forward(self, input):
         # Lazy-initialize the weights, because at creation/link time we may not know the size of previous layer
         if self.weight_before is None:
-            # self.weight_before = sqrt(2. / self.activation.shape[0]) * randn(input.shape[0], self.size)
-            self.weight_before = randn(input.shape[0], self.size)  # todo
+            self.weight_before = sqrt(2. / self.activation.shape[0]) * randn(input.shape[0], self.size)
         assert self.weight_before.shape[0] == input.shape[0]
         # Weights
         self.raw_input[:] = self.weight_before.T.dot(input)
@@ -156,7 +149,6 @@ class DenseLayer(Layer):
             nxt.forward(self.activation)
     
     def backward(self, data, learning_rate):
-        # print("back", data.shape)
         # calculate delta by multiplying by derivative of activation
         self.delta[:] = data * self.deriv_activf(self.raw_input)
         if any(prev.needs_deltas() for prev in self.previous):
@@ -171,11 +163,6 @@ class DenseLayer(Layer):
             ad_grid = prev.get_activation()[:, newaxis].dot(self.delta[newaxis, :])
             self.weight_before -= ad_grid * (float(learning_rate) / len(self.previous))
 
-    # def link(self, next_layer):
-    #     res = super(DenseLayer, self).link(next_layer)
-    #     assert len(self.previous) <= 1
-    #     return res
-
 
 class OutputLayer(DenseLayer):
     def __init__(self, size, activf=lin, deriv_activf=dlin, costf=quad_cost, deriv_costf=dquad_cost):
@@ -187,7 +174,6 @@ class OutputLayer(DenseLayer):
         super(OutputLayer, self).forward(input)
         assert not self.next
         return self.activation
-        # print("output activation(s): {0:s}".format(", ".join("{0:.4f}".format(a) for a in self.activation)))
     
     def __str__(self):
         return ("{0:s}%{1:d}".format(
@@ -201,85 +187,72 @@ class OutputLayer(DenseLayer):
 
 
 class InputLayer(Layer):
-    # def __init__(self, size, activf=lin, deriv_activf=dlin):
-    #     super(InputLayer, self).__init__(size, activf=activf, deriv_activf=deriv_activf)
-    #     self.raw_input = zeros((self.size,))
-
     def forward(self, input):
         self.activation = self.raw_input = copy(input)
         for nxt in self.next:
             nxt.forward(input)
     
     def backward(self, data, learning_rate):
-        # print("backpropagated! data.shape = {}".format(data.shape))  # todo
         pass
     
     def needs_deltas(self):
         return False
 
-# il = InputLayer(2)
-# dl = DenseLayer(10)
-# sl = DenseLayer(6)
-# print(il)
-# print(dl)
-# print(sl)
-# il.link(dl)
-# dl.link(sl)
-# print(il)
-# print(dl)
-# print(sl)
-# exit()
 
 nn = Network(
     InputLayer(2).link(
-    DenseLayer(20, activf=leakReLU, deriv_activf=deriv_leakReLU).link(
-    DenseLayer(16, activf=leakReLU, deriv_activf=deriv_leakReLU).link(
-    OutputLayer(1, activf=leakReLU, deriv_activf=deriv_leakReLU)))),
-    # OutputLayer(1, activf=sigmoid, deriv_activf=dsigmoid)))),
-    learning_rate=1e-6
+    DenseLayer(5, activf=leakReLU, deriv_activf=deriv_leakReLU).link(
+    ## DenseLayer(16, activf=leakReLU, deriv_activf=deriv_leakReLU).link(
+    OutputLayer(1, activf=leakReLU, deriv_activf=deriv_leakReLU))),
+    # OutputLayer(1, activf=sigmoid, deriv_activf=dsigmoid))),
+    learning_rate=0.001
 )
 
-if True:  # todo
-    # Linear
-    for n in range(1000):
-        cost = 0
-        for k in range(30):
-            inp = randint(1001, size=(2,)) * 1e-3
-            # outp = min(max(0.45 * inp[0] - 0.22 * inp[1], 0), 1)
-            outp = 3 * inp[0] - 1 * inp[1]
-            res = nn.execute_for(inp)
-            if k % 10 == 0:
-                print('{0:6.3f} & {1:6.3f} = {2:6.3f}   {3:6.3f}'.format(inp[0], inp[1], outp, res[0][0]))
-            cost += nn.get_cost(outp)
-            nn.learn_from(outp)
+# Linear regression
+for n in range(1000):
+    cost = 0
+    for k in range(40):
+        inp = array([1e-3 * ((425 * k) % 1000),
+            1e-3 * ((275 * k) % 1000)])
+        outp = 3 * inp[0] - 1 * inp[1]
+        res = nn.execute_for(inp)
+        if n % 10 == 0 and k % 10 == 0:
+            print('{0:6.3f} & {1:6.3f} = {2:6.3f}   {3:6.3f}'.format(inp[0], inp[1], outp, res[0][0]))
+        cost += nn.get_cost(outp)
+        nn.learn_from(outp)
+    print('cost: {0:.3f}'.format(cost))
+    if cost < 1e-3:
+        print('good enough')
+        break
+
+# XOR classification
+print("  XOR")
+costs = []
+for n in range(50000):
+    cost = 0
+    for k in range(4):
+        inp = array([(k // 2) % 2, k % 2])
+        outp = array(logical_xor(*inp), dtype=int)
+        res = nn.execute_for(inp)
+        if n % 1000 == 0:
+            print('{0:} x {1:} = {2:}  {3:.0f}  {3:.3f}'.format(inp[0], inp[1], outp, abs(round(res[0][0])), res[0][0]))
+        cost += nn.get_cost(outp)
+        nn.learn_from(outp)
+    if n % 100 == 0:
         print('cost: {0:.3f}'.format(cost))
+        costs.append(cost)
         if cost < 1e-3:
-            print('good enough')
             break
 
-if False: # todo
-    # XOR
-    for n in range(10000):
-        cost = 0
-        for k in range(4):
-            inp = array([(k // 2) % 2, k % 2])
-            outp = array(logical_xor(*inp), dtype=int)
-            res = nn.execute_for(inp)
-            if n % 100 == 0:
-                print('{0:} x {1:} = {2:}  {3:.3f}'.format(inp[0], inp[1], outp, res[0][0]))
-            cost += nn.get_cost(outp)
-            nn.learn_from(outp)
-        if n % 10 == 0:
-            print('cost: {0:.3f}'.format(cost))
+fig, ax = subplots(tight_layout=True)
+ax.set_title("XOR cost progression")
+ax.plot(costs)
+ax.set_yscale('log')
+show()
 
-# nn.execute_for(ones(2))
-# for layer in nn.flat_layers():
-#     print(layer.size, '->', layer.weight_before.shape if hasattr(layer, 'weight_before') else '')
-#
-# print("cost: {0:.4f}".format(nn.get_cost()))
-# nn.learn_from(0.5)
-#
-# network.forward(ones((3,)))
-
+#todo: why does sigmoid not perform well for classification output layer?
 #todo: dropout layer
+#todo: choose initializer functions
+#todo: batch learning
+
 
