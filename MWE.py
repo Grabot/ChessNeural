@@ -1,9 +1,9 @@
 
-from numpy import zeros, copy, ones, newaxis, array, logical_xor
-from numpy.random import randn, seed
+from numpy import zeros, copy, newaxis, array, logical_xor, exp, sqrt
+from numpy.random import randn, seed, randint
 
 
-seed(1234567)
+seed(123456789)
 
 
 def lin(x):
@@ -14,12 +14,29 @@ def dlin(x):
     return 1
 
 
-def quad_cost(x):
-    return (x**2).sum()
+def leakReLU(x):
+    return deriv_leakReLU(x) * x
 
 
-def dquad_cost(x):
-    return x
+def deriv_leakReLU(x):
+    return 0.1 + (x > 0)
+
+
+def sigmoid(x):
+    return 1.0 / (1.0 + exp(-x))
+
+
+def dsigmoid(x):
+    q = sigmoid(x)
+    return q * (1 - q)
+
+
+def quad_cost(actual, expected):
+    return ((actual - expected)**2).sum()
+
+
+def dquad_cost(actual, expected):
+    return actual - expected
 
 
 class Network(object):
@@ -35,7 +52,7 @@ class Network(object):
     def find_ends(layer):
         if layer.next:
             for nxt in layer.next:
-                for res in Network.find_ends(nxt):  # yield from in py3.3
+                for res in Network.find_ends(nxt):  # `yield from` in py3.3
                     yield res
         else:
             yield layer
@@ -51,6 +68,7 @@ class Network(object):
     def execute_for(self, data):
         for input in self.input_layers:
             input.forward(data)
+        return tuple(out.activation for out in self.output_layers)
     
     def learn_from(self, expected):
         for output in self.output_layers:
@@ -60,8 +78,8 @@ class Network(object):
     def __str__(self):
         return "network: [{0:}]".format(", ".join(str(layer) for layer in self.input_layers))
 
-    def get_cost(self):
-        return sum(layer.get_cost() for layer in self.output_layers)
+    def get_cost(self, expected):
+        return sum(layer.get_cost(expected) for layer in self.output_layers)
     
     def flat_layers(self, layers=None):
         if layers is None:
@@ -122,21 +140,23 @@ class DenseLayer(Layer):
         # self.weight_before = randn(self.previous[0].size, self.size)
     
     def forward(self, input):
+        # Lazy-initialize the weights, because at creation/link time we may not know the size of previous layer
         if self.weight_before is None:
-            self.weight_before = randn(input.shape[0], self.size)
+            # self.weight_before = sqrt(2. / self.activation.shape[0]) * randn(input.shape[0], self.size)
+            self.weight_before = randn(input.shape[0], self.size)  # todo
         assert self.weight_before.shape[0] == input.shape[0]
-        # weights
+        # Weights
         self.raw_input[:] = self.weight_before.T.dot(input)
-        # biasses
+        # Biasses
         self.raw_input += self.bias
-        # activation
+        # Activation
         self.activation[:] = self.activf(self.raw_input)
-        # pass on
+        # Pass on to next layer
         for nxt in self.next:
-            nxt.forward(self.activation[:])
+            nxt.forward(self.activation)
     
     def backward(self, data, learning_rate):
-        print("back", data.shape)
+        # print("back", data.shape)
         # calculate delta by multiplying by derivative of activation
         self.delta[:] = data * self.deriv_activf(self.raw_input)
         if any(prev.needs_deltas() for prev in self.previous):
@@ -145,11 +165,11 @@ class DenseLayer(Layer):
             for prev in self.previous:
                 prev.backward(prev_delta, learning_rate=learning_rate)
         # Update biasses
-        self.bias += learning_rate * self.delta
+        self.bias -= learning_rate * self.delta
         # Update weights (input activation and output delta) (scale by number of previous neurons)
         for prev in self.previous:
             ad_grid = prev.get_activation()[:, newaxis].dot(self.delta[newaxis, :])
-            self.weight_before += learning_rate * ad_grid / len(self.previous)
+            self.weight_before -= ad_grid * (float(learning_rate) / len(self.previous))
 
     # def link(self, next_layer):
     #     res = super(DenseLayer, self).link(next_layer)
@@ -158,14 +178,15 @@ class DenseLayer(Layer):
 
 
 class OutputLayer(DenseLayer):
-    def __init__(self, size, activf=lin, deriv_activf=dlin, costf=quad_cost, dcostf=dquad_cost):
+    def __init__(self, size, activf=lin, deriv_activf=dlin, costf=quad_cost, deriv_costf=dquad_cost):
         super(OutputLayer, self).__init__(size, activf=activf, deriv_activf=deriv_activf)
         self.costf = costf
-        self.dcostf = dcostf
+        self.deriv_costf = deriv_costf
     
     def forward(self, input):
         super(OutputLayer, self).forward(input)
         assert not self.next
+        return self.activation
         # print("output activation(s): {0:s}".format(", ".join("{0:.4f}".format(a) for a in self.activation)))
     
     def __str__(self):
@@ -173,10 +194,10 @@ class OutputLayer(DenseLayer):
             self.__class__.__name__, self.size))
 
     def delta_from_expectation(self, expected, learning_rate):
-        self.backward(self.dcostf(self.activation - expected), learning_rate=learning_rate)
+        self.backward(self.deriv_costf(self.activation, expected), learning_rate=learning_rate)
 
-    def get_cost(self):
-        return self.costf(self.activation)
+    def get_cost(self, expected):
+        return self.costf(self.activation, expected)
 
 
 class InputLayer(Layer):
@@ -211,19 +232,45 @@ class InputLayer(Layer):
 
 nn = Network(
     InputLayer(2).link(
-    DenseLayer(10).link(
-    DenseLayer(6).link(
-    OutputLayer(1)))),
-    learning_rate= 0.01
+    DenseLayer(20, activf=leakReLU, deriv_activf=deriv_leakReLU).link(
+    DenseLayer(16, activf=leakReLU, deriv_activf=deriv_leakReLU).link(
+    OutputLayer(1, activf=leakReLU, deriv_activf=deriv_leakReLU)))),
+    # OutputLayer(1, activf=sigmoid, deriv_activf=dsigmoid)))),
+    learning_rate=1e-6
 )
 
-for k in range(10):
-    inp = array([(k // 2) % 2, k % 2])
-    outp = array(logical_xor(*inp), dtype=int)
-    print(inp, outp)
-    nn.execute_for(inp)
-    print('cost: {0:.3f}'.format(nn.get_cost()))
-    nn.learn_from(outp)
+if True:  # todo
+    # Linear
+    for n in range(1000):
+        cost = 0
+        for k in range(30):
+            inp = randint(1001, size=(2,)) * 1e-3
+            # outp = min(max(0.45 * inp[0] - 0.22 * inp[1], 0), 1)
+            outp = 3 * inp[0] - 1 * inp[1]
+            res = nn.execute_for(inp)
+            if k % 10 == 0:
+                print('{0:6.3f} & {1:6.3f} = {2:6.3f}   {3:6.3f}'.format(inp[0], inp[1], outp, res[0][0]))
+            cost += nn.get_cost(outp)
+            nn.learn_from(outp)
+        print('cost: {0:.3f}'.format(cost))
+        if cost < 1e-3:
+            print('good enough')
+            break
+
+if False: # todo
+    # XOR
+    for n in range(10000):
+        cost = 0
+        for k in range(4):
+            inp = array([(k // 2) % 2, k % 2])
+            outp = array(logical_xor(*inp), dtype=int)
+            res = nn.execute_for(inp)
+            if n % 100 == 0:
+                print('{0:} x {1:} = {2:}  {3:.3f}'.format(inp[0], inp[1], outp, res[0][0]))
+            cost += nn.get_cost(outp)
+            nn.learn_from(outp)
+        if n % 10 == 0:
+            print('cost: {0:.3f}'.format(cost))
 
 # nn.execute_for(ones(2))
 # for layer in nn.flat_layers():
