@@ -100,7 +100,7 @@ class MLP_NeuralNetwork(object):
         # do all the forward propagating uniformly for all the layers
         for k in range(1, len(self.layers)):
             # print(">>", self.layers[k].activation.shape, self.layers[k - 1].weight_after.shape, self.layers[k - 1].activation.shape)
-            print(self.layers[k - 1].weight_after.dot(self.layers[k - 1].activation).shape, self.layers[k].bias.shape)
+            # print(self.layers[k - 1].weight_after.dot(self.layers[k - 1].activation).shape, self.layers[k].bias.shape)
             self.layers[k].raw_activation[:] = self.layers[k - 1].weight_after.dot(self.layers[k - 1].activation) + self.layers[k].bias
             self.layers[k].activation[:] = self.layers[k].activation_function(self.layers[k].raw_activation[:])
         """ loop code:
@@ -308,8 +308,8 @@ class MLP_NeuralNetwork(object):
         Currently this will print out the targets next to the predictions.
         Not useful for actual ML, just for visual inspection.
         """
-        for p in patterns:
-            print(p[0], '->', self.feedForward(p[0]))
+        # for p in patterns:
+        #     print(p[0], '->', self.feedForward(p[0]))
 
     def giveInput(self, input):
         return self.feedForward(input)[0]
