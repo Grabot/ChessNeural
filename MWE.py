@@ -41,11 +41,19 @@ def dquad_cost(actual, expected):
 
 
 class Network(object):
-    def __init__(self, input_layer, learning_rate=0.01):
+    def __init__(self, input_layer, learning_rate=0.01, goal_learning_rate=None):
+        """
+        :param input_layer: The first layer in the network
+        :param learning_rate: The initial learning rate
+        :param goal_learning_rate: The final learning rate (if not set, equal to initial for a constant learning rate)
+        """
         self.input_layers = []
         self.output_layers = []
         self.add_input(input_layer)
         self.learning_rate = learning_rate
+        self.goal_learning_rate = goal_learning_rate
+        if (self.goal_learning_rate is None):
+            self.goal_learning_rate = learning_rate
         for layer in self.find_ends(input_layer):
             self.add_output(layer)
     
@@ -88,7 +96,28 @@ class Network(object):
             yield layer
             for sub in self.flat_layers(layer.next):
                 yield sub
-
+    
+    def train(self, input, output):
+        assert len(input.shape) == 2
+        assert len(output.shape) == 1
+        assert input.shape[0] == output.shape[0], 'mismatch between input and output shape'
+        costs = []
+        for n in range(50000):
+            cost = 0
+            for k in range(4):
+                inp = array([(k // 2) % 2, k % 2])
+                outp = array(logical_xor(*inp), dtype=int)
+                res = nn.execute_for(inp)
+                if n % 1000 == 0:
+                    print('{0:} x {1:} = {2:}  {3:.0f}  {3:.3f}'.format(inp[0], inp[1], outp, abs(round(res[0][0])), res[0][0]))
+                cost += nn.get_cost(outp)
+                nn.learn_from(outp)
+            if n % 100 == 0:
+                print('cost: {0:.3f}'.format(cost))
+                costs.append(cost)
+                if cost < 1e-3:
+                    break
+    
 
 class Layer(object):
     def __init__(self, size, activf=lin, deriv_activf=dlin):
@@ -254,5 +283,6 @@ show()
 #todo: dropout layer
 #todo: choose initializer functions
 #todo: batch learning
-
+#todo: dynamic learning rate
+#todo: leave-out-validation
 
