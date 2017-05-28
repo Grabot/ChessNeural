@@ -1,5 +1,5 @@
 
-from numpy import exp, array, newaxis, empty
+from numpy import exp, array, newaxis, empty, sqrt
 from numpy.random import randn
 
 
@@ -36,7 +36,7 @@ class MLP_Layer(object):
         if self.previous:
             self.previous.next = self
             self.bias = randn(self.size)
-            self.weight_before = randn(self.previous.size, self.size)
+            self.weight_before = sqrt(2 / self.size) * randn(self.previous.size, self.size)
     
 
 class MLP_NeuralNetwork(object):
