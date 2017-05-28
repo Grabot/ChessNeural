@@ -1,7 +1,7 @@
 
 from sys import stdout
 from numpy import zeros, copy, newaxis, array, exp, linspace, isfinite, arange, ones
-from numpy.random import randn, seed, shuffle
+from numpy.random import randn, seed, shuffle, randint, rand
 
 
 def lin(x):
@@ -105,9 +105,9 @@ class Network(object):
         assert isinstance(output_layer, OutputLayer), str(type(output_layer))
         self.output_layers.append(output_layer)
     
-    def execute_for(self, data):
+    def execute_for(self, data, for_learning=False):
         for input in self.input_layers:
-            input.forward(data)
+            input.forward(data, for_learning=for_learning)
         return tuple(out.activation for out in self.output_layers)
     
     def learn_from(self, expected):
@@ -151,13 +151,13 @@ class Network(object):
             epoch_test_cost = 0.
             # Train samples
             for inp, outp in zip(input[:train_sample_count], output[:train_sample_count]):
-                self.execute_for(inp)
+                self.execute_for(inp, for_learning=True)
                 self.learn_from(outp)
                 epoch_train_cost += self.get_cost(outp)
             train_costs.append(epoch_train_cost / train_sample_count)
             # Test samples
             for inp, outp in zip(input[train_sample_count:], output[train_sample_count:]):
-                self.execute_for(inp)
+                self.execute_for(inp, for_learning=False)
                 epoch_test_cost += self.get_cost(outp)
             test_costs.append(epoch_test_cost / test_sample_count)
             # Stop conditions
@@ -196,13 +196,10 @@ class Network(object):
         
 
 class Layer(object):
-    def __init__(self, size, activf=lin, deriv_activf=dlin):
+    def __init__(self, size):
         self.previous = []
         self.next = []
         self.size = size
-        self.activf = activf
-        self.deriv_activf = deriv_activf
-        self.raw_input = zeros((self.size,))
         self.activation = zeros(self.size)
         
     def link(self, next_layer):
@@ -211,7 +208,7 @@ class Layer(object):
         next_layer.previous.append(self)
         return self
     
-    def forward(self, input):
+    def forward(self, input, for_learning=False):
         raise NotImplementedError()
     
     def backward(self, back):
@@ -234,13 +231,16 @@ class Layer(object):
 class DenseLayer(Layer):
     def __init__(self, size, activf=lin, deriv_activf=dlin, bias_initializer=InitConst(0),
             weight_initializer=RescaleWrapper(InitNormalRandom())):
-        super(DenseLayer, self).__init__(size, activf=activf, deriv_activf=deriv_activf)
+        super(DenseLayer, self).__init__(size)
         self.bias = bias_initializer.generate(self.size)
         self._weight_initializer = weight_initializer
         self.weight_before = None
         self.delta = zeros(self.size)
+        self.activf = activf
+        self.deriv_activf = deriv_activf
+        self.raw_input = zeros((self.size,))
     
-    def forward(self, input):
+    def forward(self, input, for_learning=False):
         # Lazy-initialize the weights, because at creation/link time we may not know the size of previous layer
         if self.weight_before is None:
             self.weight_before = self._weight_initializer.generate((input.shape[0], self.size))
@@ -253,7 +253,7 @@ class DenseLayer(Layer):
         self.activation[:] = self.activf(self.raw_input)
         # Pass on to next layer
         for nxt in self.next:
-            nxt.forward(self.activation)
+            nxt.forward(self.activation, for_learning=for_learning)
     
     def backward(self, data, learning_rate):
         # Calculate delta by multiplying by derivative of activation
@@ -279,8 +279,8 @@ class OutputLayer(DenseLayer):
         self.costf = costf
         self.deriv_costf = deriv_costf
     
-    def forward(self, input):
-        super(OutputLayer, self).forward(input)
+    def forward(self, input, for_learning=False):
+        super(OutputLayer, self).forward(input, for_learning=for_learning)
         assert not self.next
         return self.activation
     
@@ -296,16 +296,49 @@ class OutputLayer(DenseLayer):
 
 
 class InputLayer(Layer):
-    def forward(self, input):
+    def __init__(self, size, activf=lin, deriv_activf=dlin):
+            super(InputLayer, self).__init__(size)
+            self.activf = activf
+            self.deriv_activf = deriv_activf
+            self.raw_input = zeros((self.size,))
+    
+    def forward(self, input, for_learning=False):
         self.activation = self.raw_input = copy(input)
         for nxt in self.next:
-            nxt.forward(input)
+            nxt.forward(input, for_learning=for_learning)
     
     def backward(self, data, learning_rate):
         pass
     
     def needs_deltas(self):
         return False
+
+
+
+class DropoutLayer(Layer):
+    def __init__(self, size, drop_fraction=0.5):
+        super(DropoutLayer, self).__init__(size)
+        assert 0 <= drop_fraction < 1
+        self.drop_fraction = drop_fraction
+    
+    def forward(self, input, for_learning=False):
+        assert self.size == input.shape[0], \
+            'size of dropout layer should be the same as the layer before it'
+        # Store the activation (just a reference)
+        self.activation = filtered = input
+        # Drop a random set of neurons if in learning mode
+        if for_learning:
+            mask = rand(*input.shape) > self.drop_fraction
+            filtered = (1 / (1. - self.drop_fraction)) * mask * input
+        # Pass on to next layer
+        for nxt in self.next:
+            nxt.forward(filtered, for_learning=for_learning)
+    
+    def backward(self, data, learning_rate):
+        if any(prev.needs_deltas() for prev in self.previous):
+            # Calculate the correction input for the previous layer (delta before multiplication by activation)
+            for prev in self.previous:
+                prev.backward(data, learning_rate=learning_rate)
 
 
 if __name__ == '__main__':

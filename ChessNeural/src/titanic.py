@@ -6,7 +6,7 @@ https://www.kaggle.com/c/titanic/
 
 import csv
 from numpy import array, log
-from marknet import Network, InputLayer, DenseLayer, OutputLayer, leakReLU, deriv_leakReLU, InitConst
+from marknet import Network, InputLayer, DenseLayer, OutputLayer, leakReLU, deriv_leakReLU, InitConst, DropoutLayer
 
 
 def yield_data():
@@ -75,10 +75,13 @@ data = array(data, dtype=float)
 nn = Network(
     InputLayer(2).link(
         DenseLayer(40, activf=leakReLU, deriv_activf=deriv_leakReLU).link(
+        DropoutLayer(40).link(
         DenseLayer(30, activf=leakReLU, deriv_activf=deriv_leakReLU).link(
+        DropoutLayer(30).link(
         DenseLayer(25, activf=leakReLU, deriv_activf=deriv_leakReLU).link(
+        DropoutLayer(25).link(
         OutputLayer(1, activf=leakReLU, deriv_activf=deriv_leakReLU, bias_initializer=InitConst(0.5))
-    )))),
+    ))))))),
     learning_rate=0.0002,
     goal_learning_rate=0.00001,
     max_epoch_count=5000,
