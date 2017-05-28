@@ -1,7 +1,7 @@
 from sys import stdout
 
 from matplotlib.pyplot import subplots, show
-from numpy import zeros, copy, newaxis, array, logical_xor, exp, sqrt, linspace, isfinite, arange
+from numpy import zeros, copy, newaxis, array, exp, sqrt, linspace, isfinite, arange, ones
 from numpy.random import randn, seed, shuffle
 
 seed(123456789)
@@ -38,6 +38,34 @@ def quad_cost(actual, expected):
 
 def dquad_cost(actual, expected):
     return actual - expected
+
+
+
+class Initializer(object):
+    def generate(self, shape):
+        raise NotImplementedError("Initializers should implement .generate(shape)")
+
+
+class InitConst(Initializer):
+    def __init__(self, val):
+        self.val = val
+    
+    def generate(self, shape):
+        return ones(shape) * self.val
+
+
+class InitNormalRandom(Initializer):
+    def generate(self, shape):
+        return randn(*shape)
+
+
+class RescaleWrapper(Initializer):
+    def __init__(self, base_initializer):
+        self.base_initializer = base_initializer
+    
+    def generate(self, shape):
+        # I think this is called He rescaling but I'm not sure
+        return self.base_initializer.generate(shape) * (2 * shape[-1])**-0.5
 
 
 class Network(object):
@@ -193,16 +221,18 @@ class Layer(object):
     
 
 class DenseLayer(Layer):
-    def __init__(self, size, activf=lin, deriv_activf=dlin):
+    def __init__(self, size, activf=lin, deriv_activf=dlin, bias_initializer=InitConst(0),
+            weight_initializer=RescaleWrapper(InitNormalRandom())):
         super(DenseLayer, self).__init__(size, activf=activf, deriv_activf=deriv_activf)
-        self.bias = randn(self.size)
+        self.bias = bias_initializer.generate(self.size)
+        self._weight_initializer = weight_initializer
         self.weight_before = None
         self.delta = zeros(self.size)
     
     def forward(self, input):
         # Lazy-initialize the weights, because at creation/link time we may not know the size of previous layer
         if self.weight_before is None:
-            self.weight_before = sqrt(2. / self.activation.shape[0]) * randn(input.shape[0], self.size)
+            self.weight_before = self._weight_initializer.generate((input.shape[0], self.size))
         assert self.weight_before.shape[0] == input.shape[0]
         # Weights
         self.raw_input[:] = self.weight_before.T.dot(input)
@@ -231,8 +261,10 @@ class DenseLayer(Layer):
 
 
 class OutputLayer(DenseLayer):
-    def __init__(self, size, activf=lin, deriv_activf=dlin, costf=quad_cost, deriv_costf=dquad_cost):
-        super(OutputLayer, self).__init__(size, activf=activf, deriv_activf=deriv_activf)
+    def __init__(self, size, activf=lin, deriv_activf=dlin, costf=quad_cost, deriv_costf=dquad_cost, bias_initializer=InitConst(0),
+            weight_initializer=RescaleWrapper(InitNormalRandom())):
+        super(OutputLayer, self).__init__(size, activf=activf, deriv_activf=deriv_activf, bias_initializer=bias_initializer,
+            weight_initializer=weight_initializer)
         self.costf = costf
         self.deriv_costf = deriv_costf
     
@@ -267,9 +299,9 @@ class InputLayer(Layer):
 
 nn = Network(
     InputLayer(2).link(
-    DenseLayer(5, activf=leakReLU, deriv_activf=deriv_leakReLU).link(
+    DenseLayer(5, activf=leakReLU, deriv_activf=deriv_leakReLU, weight_initializer=InitNormalRandom()).link(
     ## DenseLayer(16, activf=leakReLU, deriv_activf=deriv_leakReLU).link(
-    OutputLayer(1, activf=leakReLU, deriv_activf=deriv_leakReLU))),
+    OutputLayer(1, activf=leakReLU, deriv_activf=deriv_leakReLU, bias_initializer=InitConst(0.5)))),
     # OutputLayer(1, activf=sigmoid, deriv_activf=dsigmoid))),
     learning_rate=0.01,
     goal_learning_rate=0.0001,
@@ -309,6 +341,5 @@ show()
 
 #todo: why does sigmoid not perform well for classification output layer?
 #todo: dropout layer
-#todo: choose initializer functions
 
 
