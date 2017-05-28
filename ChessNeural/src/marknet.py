@@ -379,6 +379,5 @@ if __name__ == '__main__':
     nn.plot_progress(trainc, testc)
     
 #todo: why does sigmoid not perform well for classification output layer?
-#todo: dropout layer
 
 
