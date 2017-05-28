@@ -1,10 +1,7 @@
+
 from sys import stdout
-
-from matplotlib.pyplot import subplots, show
-from numpy import zeros, copy, newaxis, array, exp, sqrt, linspace, isfinite, arange, ones
+from numpy import zeros, copy, newaxis, array, exp, linspace, isfinite, arange, ones
 from numpy.random import randn, seed, shuffle
-
-seed(123456789)
 
 
 def lin(x):
@@ -175,7 +172,7 @@ class Network(object):
             else:
                 stop_condition_streak = 0
             # Printing
-            if epoch % print_every_epochs == 0 or stop_condition_streak >= 5:
+            if epoch % print_every_epochs == 0 or stop_condition_streak >= 5 or epoch == self.max_epoch_count - 1:
                 stdout.write('{0:5d} {1:10.5f} {2:10.5f} {3:10.5f}\n'.format(epoch, train_costs[-1],
                     test_costs[-1], train_costs[-1] / test_costs[-1]))
             if stop_condition_streak >= 5:
@@ -183,6 +180,20 @@ class Network(object):
         
         return train_costs, test_costs
 
+    def plot_progress(self, trainc, testc):
+        if not trainc:
+            return
+        from matplotlib.pyplot import subplots, show  # import here so it's not required for the rest of the code
+        fig, ax = subplots(tight_layout=True)
+        ax.plot(trainc, color='green', label='train error')
+        ax.plot(testc, color='red', label='test error')
+        ax.set_yscale('log')
+        ax.set_title("XOR cost progression")
+        ax.set_xlabel('Epoch')
+        ax.set_ylabel('Error (log)')
+        ax.legend(loc='upper right')
+        show()
+        
 
 class Layer(object):
     def __init__(self, size, activf=lin, deriv_activf=dlin):
@@ -297,48 +308,43 @@ class InputLayer(Layer):
         return False
 
 
-nn = Network(
-    InputLayer(2).link(
-    DenseLayer(5, activf=leakReLU, deriv_activf=deriv_leakReLU, weight_initializer=InitNormalRandom()).link(
-    ## DenseLayer(16, activf=leakReLU, deriv_activf=deriv_leakReLU).link(
-    OutputLayer(1, activf=leakReLU, deriv_activf=deriv_leakReLU, bias_initializer=InitConst(0.5)))),
-    # OutputLayer(1, activf=sigmoid, deriv_activf=dsigmoid))),
-    learning_rate=0.01,
-    goal_learning_rate=0.0001,
-    max_epoch_count=10000,
-    stop_at_train_cost=1e-4,
-    stop_at_train_test_ratio=3,
-    test_fraction=0.4
-)
-
-# XOR test data
-sample = arange(0, 40) % 4
-shuffle(sample)
-input = array([
-    [0, 0],
-    [0, 1],
-    [1, 0],
-    [1, 1],
-])[sample, :]
-output = array([
-    0,
-    1,
-    1,
-    0,
-])[sample]
-
-trainc, testc = nn.train(input, output)
-
-fig, ax = subplots(tight_layout=True)
-ax.plot(trainc, color='green', label='train error')
-ax.plot(testc, color='red', label='test error')
-ax.set_yscale('log')
-ax.set_title("XOR cost progression")
-ax.set_xlabel('Epoch')
-ax.set_ylabel('Error (log)')
-ax.legend(loc='upper right')
-show()
-
+if __name__ == '__main__':
+    seed(123456789)
+    
+    nn = Network(
+        InputLayer(2).link(
+        DenseLayer(5, activf=leakReLU, deriv_activf=deriv_leakReLU, weight_initializer=InitNormalRandom()).link(
+        ## DenseLayer(16, activf=leakReLU, deriv_activf=deriv_leakReLU).link(
+        OutputLayer(1, activf=leakReLU, deriv_activf=deriv_leakReLU, bias_initializer=InitConst(0.5)))),
+        # OutputLayer(1, activf=sigmoid, deriv_activf=dsigmoid))),
+        learning_rate=0.01,
+        goal_learning_rate=0.0001,
+        max_epoch_count=10000,
+        stop_at_train_cost=1e-4,
+        stop_at_train_test_ratio=3,
+        test_fraction=0.4
+    )
+    
+    # XOR test data
+    sample = arange(0, 40) % 4
+    shuffle(sample)
+    input = array([
+        [0, 0],
+        [0, 1],
+        [1, 0],
+        [1, 1],
+    ])[sample, :]
+    output = array([
+        0,
+        1,
+        1,
+        0,
+    ])[sample]
+    
+    trainc, testc = nn.train(input, output)
+    
+    nn.plot_progress(trainc, testc)
+    
 #todo: why does sigmoid not perform well for classification output layer?
 #todo: dropout layer
 
