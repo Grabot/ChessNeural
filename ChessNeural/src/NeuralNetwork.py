@@ -1,46 +1,43 @@
 
-import numpy as np
-import os
+from numpy import exp, array, newaxis, empty
+from numpy.random import randn
 
 
 def sigmoid(x):
-    return 1. / (1 + np.exp(-x))
+    return 1 / (1 + exp(-x))
 
 
 # derivative of sigmoid
 # sigmoid(y) * (1.0 - sigmoid(y))
 # the way we use this y is already sigmoided
 def dsigmoid(y):
-    return y * (1. - y)
+    return y * (1.0 - y)
 
 
-def dsigmoid_unsigmoided(y):
-    z = sigmoid(y)
-    return dsigmoid(z)
+# Simpler, better activation functions
+def leakReLU(x):
+    return deriv_leakReLU(x) * x
 
 
-def linear(x):
-    return x
+def deriv_leakReLU(x):
+    return 0.1 + (x > 0)
 
 
-def dlinear(y):
-    return 1
-
-
+# Store the data in a layer class
 class MLP_Layer(object):
-    """
-    For now this just holds the data of each layer (it could have some methods).
-    """
-    def __init__(self, activation, weight_after, bias, activation_function, derivative_activation_function):
-        self.activation = activation
-        self.raw_activation = np.empty(activation.shape)  # without activation function
-        self.weight_after = weight_after
-        self.bias = 0 if bias is None else bias  # default bias is 0
-        self.delta_weight = np.empty(weight_after.shape) if weight_after is not None else 0
-        self.delta_bias = np.empty(activation.shape)
-        self.activation_function = activation_function
-        self.derivative_activation_function = derivative_activation_function
-
+    def __init__(self, layer_before, size):
+        # Use numpy arrays for everything (not Python lists)
+        self.previous = layer_before
+        self.next = None
+        self.size = size
+        self.raw_input = empty((self.size,))
+        self.activation = empty(self.size)
+        self.bias = self.weight_before = None
+        if self.previous:
+            self.previous.next = self
+            self.bias = randn(self.size)
+            self.weight_before = randn(self.previous.size, self.size)
+    
 
 class MLP_NeuralNetwork(object):
     def __init__(self, inputNodes, hiddenNodes, outputNodes):
@@ -49,249 +46,88 @@ class MLP_NeuralNetwork(object):
         :param hiddenNodes: array indicating number of nodes for x hidden layer neurons
         :param outputNodes: number of output neurons
         """
-        self.inputNodes = inputNodes
+        self.inputNodes = inputNodes + 1
         self.hiddenNodes = hiddenNodes
         self.outputNodes = outputNodes
-
-        # set up array of 1s for activations
-        self.ai = np.ones(shape=(self.inputNodes,))
-
-        self.ah = []
-        for i in range(0, len(hiddenNodes)):
-            self.ah.append(np.empty(shape=(self.hiddenNodes[i],)))
-
-        self.ao = np.empty(shape=(self.outputNodes,))
-
-        # create randomized weights
-        self.wi = np.random.randn(self.hiddenNodes[0], self.inputNodes)
-
-        self.wh = []
-        for i in range(0, len(hiddenNodes)-1):
-            self.wh.append(np.random.randn(self.hiddenNodes[i+1], self.hiddenNodes[i]))
-
-        self.wo = np.random.randn(self.outputNodes, self.hiddenNodes[len(hiddenNodes)-1])
-
-        # create arrays of 0 for changes
-        self.ci = np.zeros((self.hiddenNodes[0], self.inputNodes))
-
-        self.ch = []
-        for i in range(0, len(hiddenNodes)-1):
-            self.ch.append(np.zeros((self.hiddenNodes[i+1], self.hiddenNodes[i])))
-
-        self.co = np.zeros((self.outputNodes, self.hiddenNodes[len(hiddenNodes)-1]))
         
-        # combine all the layers
-        self.layers = [MLP_Layer(self.ai, self.wi, self.ai * 0, None, None)]
-        for a, w, c in zip(self.ah, self.wh, self.ch):
-            self.layers.append(MLP_Layer(a, w, a * 0, sigmoid, dsigmoid_unsigmoided))
-        self.layers += [MLP_Layer(self.ah[-1], self.wo, np.random.randn(*self.ah[-1].shape), sigmoid, dsigmoid_unsigmoided),
-                        MLP_Layer(self.ao, None, np.random.randn(*self.ao.shape), linear, dlinear)]
-        # for layer in self.layers:  # todo
-        #     print('{0:}  {1:}'.format(layer.activation.shape, layer.weight_after.T.shape if layer.weight_after is not None else layer.weight_after))
+        # Less code repetition with Layer objects
+        self.layers = [MLP_Layer(None, inputNodes)]
+        for hiddenSize in hiddenNodes:
+            self.layers.append(MLP_Layer(self.layers[-1], hiddenSize))
+        self.layers.append(MLP_Layer(self.layers[-1], outputNodes))
 
     def feedForward(self, inputs):
 
-        if len(inputs) != self.inputNodes:
+        if len(inputs) != self.inputNodes - 1:
             raise ValueError('Wrong number of inputs!')
 
         # input activations
-        self.layers[0].activation[:] = inputs
-        
-        # do all the forward propagating uniformly for all the layers
-        for k in range(1, len(self.layers)):
-            # print(">>", self.layers[k].activation.shape, self.layers[k - 1].weight_after.shape, self.layers[k - 1].activation.shape)
-            # print(self.layers[k - 1].weight_after.dot(self.layers[k - 1].activation).shape, self.layers[k].bias.shape)
-            self.layers[k].raw_activation[:] = self.layers[k - 1].weight_after.dot(self.layers[k - 1].activation) + self.layers[k].bias
-            self.layers[k].activation[:] = self.layers[k].activation_function(self.layers[k].raw_activation[:])
-        """ loop code:
+        self.layers[0].activation[:] = array(inputs)
+
         # first hidden activations
-        for j in range(self.hiddenNodes[0]):
-            sum = 0.0
-            for i in range(self.inputNodes):
-                sum += self.ai[i] * self.wi[i][j]
-            self.ah[0][j] = sigmoid(sum)
-
         # second and further hidden activations
-        for hid in range(1, len(self.hiddenNodes)):
-            for j in range(self.hiddenNodes[hid]):
-                sum = 0.0
-                for i in range(self.hiddenNodes[hid-1]):
-                    sum += self.ah[hid-1][i] * self.wh[hid-1][i][j]
-                self.ah[hid][j] = sigmoid(sum)
-
         # output activations
-        for k in range(self.outputNodes):
-            sum = 0.0
-            for j in range(self.hiddenNodes[len(self.hiddenNodes)-1]):
-                sum += self.ah[len(self.hiddenNodes)-1][j] * self.wo[j][k]
-            self.ao[k] = sigmoid(sum)
-        """
+        for hid in range(1, len(self.hiddenNodes) + 2):
+            # Use numpy .dot everywhere instead of nested for loops
+            # Get the activations from the previous layer
+            input = self.layers[hid - 1].activation
+            # Weights
+            self.layers[hid].raw_input[:] = self.layers[hid].weight_before.T.dot(input)
+            # Biasses
+            self.layers[hid].raw_input += self.layers[hid].bias
+            # Activation
+            self.layers[hid].activation[:] = leakReLU(self.layers[hid].raw_input)
+        
         return self.layers[-1].activation
-
+    
     def backPropagate(self, targets, N):
         """
         :param targets: y values
         :param N: learning rate
         :return: updated weights and current error
-        
-        Information at http://neuralnetworksanddeeplearning.com/chap2.html#the_four_fundamental_equations_behind_backpropagation
         """
-        
-        if os.environ.get('DEBUGLOG', False):
-            print('#' * 32)
-            for layer in self.layers:
-                print('A: ' + '  '.join('{0:8.3f}'.format(act) for act in layer.activation))
-                print('  B: ' + '  '.join('{0:8.3f}'.format(act) for act in layer.bias))
-                if layer.weight_after is not None:
-                    for row in layer.weight_after:
-                        print('  W: ' + '  '.join('{0:8.3f}'.format(w) for w in row))
-        
         if len(targets) != self.outputNodes:
             raise ValueError('Wrong number of targets')
 
-        # Get the deltas of the output layer
-        dcost = self.layers[-1].activation - targets  # (this is specific to quadratic cost function)
-        delta = - self.layers[-1].derivative_activation_function(self.layers[-1].raw_activation) * dcost
-        
-        aw = np.mean(tuple(l.weight_after.mean() if l.weight_after is not None else 0 for l in self.layers))  # todo
-        # print('avg weight: {}'.format(aw))
-        if np.isnan(aw): exit(666)
-        
-        # todo: there is probably some easier mathematical operation to avoid this loop
-        # for j in range(self.hiddenNodes[len(self.hiddenNodes)-1]):
-        #     errors = deltas * self.layers[-2].weight_after[:, j]
-        
-        # Do all the back propagating uniformly for all the layers
-        for k in range(len(self.layers) - 1, 0, -1):
-            pre_layer, post_layer = self.layers[k - 1], self.layers[k]
-            # print('layers {0:} <- {1:}'.format(pre_layer.activation.shape[0], post_layer.activation.shape[0]))
-            #todo: do weight update
-            # print(post_layer.derivative_activation_function)
-            # print(pre_layer.activation.shape)
-            # print(pre_layer.weight_after.T.shape)
-            # print(deltas.shape)
-            
-            # Calculate the changes in weights and biases
-            post_layer.delta_bias[:] = N * delta
-            # Update the weights in the network (from input activations and output deltas)
-            # print(pre_layer.weight_after.shape)
-            # print(deltas.shape)
-            # print(pre_layer.activation.shape)
-            # print(np.outer(deltas, pre_layer.activation).shape)
-            # print(np.outer(pre_layer.activation, deltas).shape)
-            pre_layer.delta_weight[:, :] = N * np.outer(delta, pre_layer.activation)
-            
-            if os.environ.get('DEBUGLOG', False):
-                print('    D: ' + '  '.join('{0:8.3f}'.format(d) for d in delta))
-                print('   DB: ' + '  '.join('{0:8.3f}'.format(d) for d in post_layer.delta_bias))
-                for row in pre_layer.delta_weight:
-                    print('   DW: ' + '  '.join('{0:8.3f}'.format(w) for w in row))
-           
-            # Compute the deltas for the previous layer from those of the current one
-            delta = post_layer.derivative_activation_function(pre_layer.raw_activation) * \
-                pre_layer.weight_after.T.dot(delta)
-            # todo: last delta is useless, no more updates
-
-            # Update the biases in the network
-            post_layer.bias += post_layer.delta_bias  # could actually be updated immediately
-            # Update the weights in the network (from input activations and output deltas)
-            # print(pre_layer.weight_after.shape)
-            # print(deltas.shape)
-            # print(pre_layer.activation.shape)
-            # print(np.outer(deltas, pre_layer.activation).shape)
-            # print(np.outer(pre_layer.activation, deltas).shape)
-            pre_layer.weight_after += pre_layer.delta_weight
-            
-            ##for j in range(self.hiddenNodes[len(self.hiddenNodes)-1]):
-            ##    errors = deltas * self.layers[k - 1].weight_after[:, j]
-            # errors += deltas * self.layers[k - 1].weight_after[k, :]
-            # hidden_deltas[len(self.hiddenNodes)-1][j] = dsigmoid(self.ah[len(self.hiddenNodes)-1][j]) * error
-            ##    deltas = self.layers[k].activation_function(self.layers[k].activation) * errors
-            # print("^^", self.layers[k].activation.shape, self.layers[k - 1].weight_after.shape, self.layers[k - 1].activation.shape)
-            # self.layers[k].activation[:] = sigmoid(
-            #     self.layers[k - 1].weight_after.dot(
-            #         self.layers[k - 1].activation
-            #     )
-            # )
-        return self.cost_function(self.layers[-1].activation, targets)
-        #todo: the rest is never used
-        
         # calculate error terms for output
         # the delta tell you which direction to change the weights
-        output_deltas = [0.0] * self.outputNodes
-        for k in range(self.outputNodes):
-            error = -(targets[k] - self.ao[k])
-            output_deltas[k] = dsigmoid(self.ao[k]) * error
+        # specific for quadratic cost function
+        delta = (self.layers[-1].activation - array(targets)) * deriv_leakReLU(self.layers[-1].raw_input)
 
-        hidden_deltas = []
-        for hid in range(0, len(self.hiddenNodes)):
-            hidden_deltas.append([0.0] * self.hiddenNodes[hid])
-
-        # calculate error terms for first hidden layer
-        # delta tells you which direction to change the weights
-        hidden_deltas[len(self.hiddenNodes)-1] = [0.0] * self.hiddenNodes[len(self.hiddenNodes)-1]
-        for j in range(self.hiddenNodes[len(self.hiddenNodes)-1]):
-            error = 0.0
-            for k in range(self.outputNodes):
-                error += output_deltas[k] * self.wo.T[j][k]
-            hidden_deltas[len(self.hiddenNodes)-1][j] = dsigmoid(self.ah[len(self.hiddenNodes)-1][j]) * error
-
-        for hid in range(len(self.hiddenNodes), 1, -1):
-            # calculate error terms for all hidden layers except first
-            # delta tells you which direction to change the weights
-            hidden_deltas[hid-2] = [0.0] * self.hiddenNodes[hid-2]
-            for j in range(self.hiddenNodes[hid-2]):
-                error = 0.0
-                for k in range(self.hiddenNodes[hid-1]):
-                    error += hidden_deltas[hid-1][k] * self.wh[hid-2].T[j][k]
-                hidden_deltas[hid-2][j] = dsigmoid(self.ah[hid-2][j]) * error
-
-
-        # update the weights connecting second hidden layer to output
-        for j in range(self.hiddenNodes[len(self.hiddenNodes)-1]):
-            for k in range(self.outputNodes):
-                change = output_deltas[k] * self.ah[len(self.hiddenNodes)-1][j]
-                self.wo[k][j] -= N * change + self.co.T[j][k]
-                self.co[k][j] = change
-
-        # update the weights connecting the hidden layers
-        for hid in range(len(self.hiddenNodes), 1, -1):
-            for j in range(self.hiddenNodes[hid-2]):
-                for k in range(self.hiddenNodes[hid-1]):
-                    change = hidden_deltas[hid-1][k] * self.ah[hid-2][j]
-                    self.wh[hid-2][k][j] -= N * change + self.ch[hid-2].T[j][k]
-                    self.ch[hid-2][k][j] = change
-
-        # update the weights connecting input to hidden
-        for i in range(self.inputNodes):
-            for j in range(self.hiddenNodes[0]):
-                change = hidden_deltas[0][j] * self.ai[i]
-                self.wi[j][i] -= N * change + self.ci.T[i][j]
-                self.ci[j][i] = change
+        for hid in reversed(range(1, len(self.hiddenNodes) + 2)):
+            # update the weights connecting second hidden layer to output
+            # update the weights connecting the hidden layers
+            # update the weights connecting input to hidden
+            # use `nexaxis` magic to make a 2D matrix out of 2 1D vectors
+            ad_grid = self.layers[hid - 1].activation[:, newaxis].dot(delta[newaxis, :])
+            self.layers[hid].weight_before -= ad_grid * N
+            
+            # also update the biasses
+            self.layers[hid].bias -= N * delta
+            
+            # Calculate delta for previous layer (except the input layer, we don't need that)
+            if hid != 1:
+                delta = self.layers[hid].weight_before.dot(delta)
         
-        return self.cost_function(self.ao, targets)
+        return self.error(targets)
         
-    def cost_function(self, output, target):
+    def error(self, targets):
         # calculate error
-        error = 0.0
-        for k in range(len(target)):
-            error += 0.5 * (target[k] - output[k]) ** 2
+        # specific for quadratic error
+        error = ((self.layers[-1].activation - array(targets))**2).sum()
         return error
 
-    def train(self, input_series, target_series, iterations=10000, N=0.01):
+    def train(self, patterns, iterations=20000, N=0.01):
         # N: learning rate
-        assert input_series.shape[0] == target_series.shape[0]
-        print('error %8.5f  progress %5d of %5d' % (  # todo: suspicious values
-            self.cost_function(self.feedForward(input_series[0]), target_series[0]), 0, iterations))
         for i in range(iterations):
             error = 0.0
-            for p in range(input_series.shape[0]):
-                inputs = input_series[p, :]
-                targets = target_series[p, :]
+            for p in patterns:
+                inputs = p[0]
+                targets = p[1]
                 self.feedForward(inputs)
                 error = self.backPropagate(targets, N)
-            if i > 0 and i % 1 == 0:
-                print('error %8.5f  progress %5d of %5d' % (error, i, iterations))
+            if i % 10 == 0:
+                print('error %-.5f' % error, " progress", i, "of", iterations)
 
     def predict(self, X):
         """
@@ -299,8 +135,7 @@ class MLP_NeuralNetwork(object):
         """
         predictions = []
         for p in X:
-            predictions.append(self.feedForward(p[0]))
-
+            predictions.append(self.feedForward(p))
         return predictions
 
     def test(self, patterns):
@@ -308,10 +143,8 @@ class MLP_NeuralNetwork(object):
         Currently this will print out the targets next to the predictions.
         Not useful for actual ML, just for visual inspection.
         """
-        # for p in patterns:
-        #     print(p[0], '->', self.feedForward(p[0]))
+        for p in patterns:
+            print(p[0], '->', self.feedForward(p[0]))
 
-    def giveInput(self, input):
-        return self.feedForward(input)[0]
 
 

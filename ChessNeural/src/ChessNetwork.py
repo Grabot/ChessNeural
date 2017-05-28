@@ -1,7 +1,6 @@
+
 import numpy as np
-import matplotlib.pyplot as plt
-from os.path import join
-import src.NeuralNetwork as NN
+import NeuralNetwork as NN
 
 
 def load_fullAdder():
@@ -59,12 +58,33 @@ def demo():
     # make it reproducible by using a random seed
     np.random.seed(1275464)
     
-    chess = load_chess(join('src', 'chess2.txt'))
+    # chess = load_chess(join('src', 'chess2.txt'))
     # load the neural network, (input, [hidden], output)+
     # the hidden layers has to be an array of at least 2 layers.
-    input, target = map(np.array, zip(*chess))
-neuro = NN.MLP_NeuralNetwork(input.shape[1], ([14, 12, 15]), target.shape[1])
-    # printh(neuro.test(chess))
+    # Neuro = NN.MLP_NeuralNetwork(len(chess[0][0]), ([14, 12, 15]), len(chess[0][1]))
+    # Neuro.train(chess)
+    # print(Neuro.test(chess))
+    
+    nn = NN.MLP_NeuralNetwork(2, [10, 7], 1)
+    learning_rate = 0.001
+    for k in range(10000):
+        cost = 0.
+        nn.feedForward([0, 0])
+        nn.backPropagate([0], learning_rate)
+        cost += nn.error([0])
+        nn.feedForward([0, 1])
+        nn.backPropagate([1], learning_rate)
+        cost += nn.error([1])
+        nn.feedForward([1, 0])
+        nn.backPropagate([1], learning_rate)
+        cost += nn.error([1])
+        nn.feedForward([1, 1])
+        nn.backPropagate([0], learning_rate)
+        cost += nn.error([0])
+        if k % 500 == 0:
+            print(cost)
+    
+    
     # x = [4, 3, 2, 5, 6, 2, 3, 4,
     #      1, 1, 1, 1, 1, 1, 1, 1,
     #      0, 0, 0, 0, 0, 0, 0, 0,
