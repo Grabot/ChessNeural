@@ -1,6 +1,6 @@
 from time import time
 import numpy as np
-import NeuralNetwork as NN
+import src.NeuralNetwork as NN
 
 
 def load_fullAdder():
