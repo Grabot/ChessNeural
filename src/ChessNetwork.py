@@ -63,7 +63,7 @@ def demo():
     # the hidden layers has to be an array of at least 2 layers.
     Neuro = NN.MLP_NeuralNetwork(2, ([14, 12, 15]), 1)
     t0 = time()
-    Neuro.train(test, iterations=100, N=0.001)
+    Neuro.train(test, iterations=1000, N=0.01)
     print(time() - t0)
     print(Neuro.test(test))
     
