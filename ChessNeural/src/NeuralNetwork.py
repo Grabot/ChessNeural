@@ -1,4 +1,3 @@
-
 from numpy import exp, array, newaxis, empty, sqrt
 from numpy.random import randn
 

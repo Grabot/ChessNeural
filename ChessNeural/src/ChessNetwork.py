@@ -1,4 +1,3 @@
-
 from time import time
 import numpy as np
 import NeuralNetwork as NN
@@ -59,34 +58,34 @@ def demo():
     # make it reproducible by using a random seed
     np.random.seed(1275464)
     
-    chess = load_chess('chess2.txt')
+    test = load_xor()
     # load the neural network, (input, [hidden], output)+
     # the hidden layers has to be an array of at least 2 layers.
-    Neuro = NN.MLP_NeuralNetwork(len(chess[0][0]), ([14, 12, 15]), len(chess[0][1]))
+    Neuro = NN.MLP_NeuralNetwork(2, ([14, 12, 15]), 1)
     t0 = time()
-    Neuro.train(chess, iterations=100, N=0.001)
+    Neuro.train(test, iterations=100, N=0.001)
     print(time() - t0)
-    # print(Neuro.test(chess))
+    print(Neuro.test(test))
     
-    return
-    nn = NN.MLP_NeuralNetwork(2, [10, 7], 1)
-    learning_rate = 0.001
-    for k in range(10000):
-        cost = 0.
-        nn.feedForward([0, 0])
-        nn.backPropagate([0], learning_rate)
-        cost += nn.error([0])
-        nn.feedForward([0, 1])
-        nn.backPropagate([1], learning_rate)
-        cost += nn.error([1])
-        nn.feedForward([1, 0])
-        nn.backPropagate([1], learning_rate)
-        cost += nn.error([1])
-        nn.feedForward([1, 1])
-        nn.backPropagate([0], learning_rate)
-        cost += nn.error([0])
-        if k % 500 == 0:
-            print(cost)
+    # return
+    # nn = NN.MLP_NeuralNetwork(2, [10, 7], 1)
+    # learning_rate = 0.001
+    # for k in range(10000):
+    #     cost = 0.
+    #     nn.feedForward([0, 0])
+    #     nn.backPropagate([0], learning_rate)
+    #     cost += nn.error([0])
+    #     nn.feedForward([0, 1])
+    #     nn.backPropagate([1], learning_rate)
+    #     cost += nn.error([1])
+    #     nn.feedForward([1, 0])
+    #     nn.backPropagate([1], learning_rate)
+    #     cost += nn.error([1])
+    #     nn.feedForward([1, 1])
+    #     nn.backPropagate([0], learning_rate)
+    #     cost += nn.error([0])
+    #     if k % 500 == 0:
+    #         print(cost)
     
     
     # x = [4, 3, 2, 5, 6, 2, 3, 4,
@@ -123,3 +122,4 @@ def demo():
 
 if __name__ == '__main__':
     demo()
+
