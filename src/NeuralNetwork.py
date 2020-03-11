@@ -1,5 +1,6 @@
 from numpy import exp, array, newaxis, empty, sqrt
 from numpy.random import randn
+import math
 
 
 def sigmoid(x):
@@ -144,6 +145,9 @@ class MLP_NeuralNetwork(object):
         """
         for p in patterns:
             print(p[0], '->', self.feedForward(p[0]))
+
+    def give_input(self, input):
+        return self.feedForward(input)[0]
 
 
 
