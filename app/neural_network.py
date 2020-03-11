@@ -4,10 +4,10 @@ import matplotlib.pyplot as plt
 
 # Data
 x_data = [
-    [0,0],
-    [0,1],
-    [1,0],
-    [1,1]
+    [0, 0],
+    [0, 1],
+    [1, 0],
+    [1, 1]
 ]
 
 y_data = [
@@ -22,17 +22,15 @@ y_data = np.array(y_data)
 
 # build the model
 model = keras.Sequential()
-
 model.add(keras.layers.Dense(4, activation="sigmoid", input_shape=(2,)))
 model.add(keras.layers.Dense(6, activation="sigmoid"))
 model.add(keras.layers.Dense(1, activation="sigmoid"))
 
-optimize = keras.optimizers.SGD(lr=0.01)
-model.compile(optimizer=optimize, loss="binary_crossentropy ", metrics=['accuracy'])
+model.compile(loss="mean_squared_error", metrics=['accuracy'])
 
 model.summary()
 
-model.fit(x_data, y_data, epochs=50000)
+model.fit(x_data, y_data, epochs=2000)
 
 predict = model.predict(x_data)
 print(predict)
@@ -59,4 +57,3 @@ x, y = np.meshgrid(x, y)
 plt.pcolormesh(x, y, intensity)
 plt.colorbar()  # need a colorbar to show the intensity scale
 plt.show()  # boom
-
